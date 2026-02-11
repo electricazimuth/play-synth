@@ -1,0 +1,36 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 654d86ff3e10445f8aba5e305a0f8782, type: 3}
+  m_Name: FX_Sweep
+  m_EditorClassIdentifier: 
+  patchName: FX_Sweep
+  priority: 3
+  parameters:
+    osc1Level: 1
+    osc2Level: 0.5
+    noiseLevel: 0.2
+    osc2Semitones: 7
+    osc2Detune: 0.1
+    osc1Waveform: 1
+    osc2Waveform: 2
+    filterCutoff: 200
+    filterResonance: 0.9
+    filterEnvAmount: 8000
+    ampAttack: 0.01
+    ampDecay: 1.5
+    ampSustain: 0
+    ampRelease: 0.5
+    filterAttack: 0.01
+    filterDecay: 1.2
+    filterSustain: 0
+    filterRelease: 0.4
+  defaultMidiNote: 36

@@ -1,0 +1,36 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 654d86ff3e10445f8aba5e305a0f8782, type: 3}
+  m_Name: Lead_Saw
+  m_EditorClassIdentifier: 
+  patchName: Lead_Saw
+  priority: 4
+  parameters:
+    osc1Level: 1
+    osc2Level: 0.8
+    noiseLevel: 0
+    osc2Semitones: -12
+    osc2Detune: 0.01
+    osc1Waveform: 1
+    osc2Waveform: 1
+    filterCutoff: 3000
+    filterResonance: 0.3
+    filterEnvAmount: 2500
+    ampAttack: 0.005
+    ampDecay: 0.15
+    ampSustain: 0.8
+    ampRelease: 0.25
+    filterAttack: 0.01
+    filterDecay: 0.25
+    filterSustain: 0.6
+    filterRelease: 0.2
+  defaultMidiNote: 60

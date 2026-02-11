@@ -1,10 +1,10 @@
-
 using UnityEngine;
 using System;
 
 /// <summary>
 /// Production-ready synthesizer voice with anti-aliased oscillators,
 /// exponential envelopes, modulation matrix, and proper gain staging.
+/// Updated to support centralized MasterSynth architecture with hot-swappable presets.
 /// </summary>
 public class SynthVoice
 {
@@ -66,29 +66,26 @@ public class SynthVoice
     private float _velocity = 1.0f;
     private float _baseFrequency = 440f;
     private bool _isActive = false;
+    
+    // Spatial parameters (set by MasterSynth)
+    private float _gain = 1.0f;  // Distance-based attenuation
+    private float _pan = 0.5f;   // 0=Left, 0.5=Center, 1=Right
+    
+    // Voice management
+    private float _currentLevel = 0f;    // For voice stealing
+    private uint _noteOnTime = 0;        // For age-based stealing
+    private int _currentPriority = 5;    // Patch priority (set by Configure)
 
     // ============================================================
     // CONTROL RATE PROCESSING
     // ============================================================
     private const int CONTROL_RATE_INTERVAL = 32;
     private int _controlCounter = 0;
-    // Current and Target values for interpolation
-    private float _currentCutoff, _targetCutoff;
-    private float _cutoffIncrement;
-
-
-    
-    // Stereo
-    public float pan = 0.5f; // 0=Left, 0.5=Center, 1=Right
-    
-    // Voice management
-    private float _currentLevel = 0f; // For voice stealing
-    private uint _noteOnTime = 0;     // For age-based stealing
     
     // Sample rate
     private double _sampleRate;
     
-    // Global pitch bend (set by VoiceManager)
+    // Global pitch bend (currently unused in centralized architecture)
     private float _pitchBendSemitones = 0f;
     
     // ============================================================
@@ -138,6 +135,29 @@ public class SynthVoice
         SetupDefaultModulation();
     }
 
+    // ============================================================
+    // CONFIGURATION (Hot-Swappable Presets)
+    // ============================================================
+    
+    /// <summary>
+    /// Configure voice with new synth parameters.
+    /// Only resets DSP state if voice is inactive to prevent clicks.
+    /// </summary>
+    public void Configure(SynthParameters p)
+    {
+        // Only reset state if voice is NOT active (prevents clicks)
+        if (!_isActive)
+        {
+            _filter.Reset();
+            _osc1.Reset();
+            _osc2.Reset();
+            // Note: Envelopes reset on NoteOn, so we don't reset them here
+        }
+        
+        // Always update parameters (safe during playback)
+        UpdateParameters(ref p);
+    }
+    
     public void UpdateParameters(ref SynthParameters p)
     {
         this.osc1Level = p.osc1Level;
@@ -146,13 +166,16 @@ public class SynthVoice
         this.osc2Semitones = p.osc2Semitones;
         this.osc2Detune = p.osc2Detune;
         
+        // Apply waveform settings
+        _osc1.waveform = (AnalogOscillator.Waveform)p.osc1Waveform;
+        _osc2.waveform = (AnalogOscillator.Waveform)p.osc2Waveform;
+        
         // Using the setters we defined earlier to clamp values
         this.SetFilterCutoff(p.filterCutoff);
         this.SetFilterResonance(p.filterResonance);
         this.filterEnvAmount = p.filterEnvAmount;
 
-        // Map Envelope settings 
-        // (Assuming you exposed setters in ExponentialADSR as discussed previously)
+        // Map Envelope settings
         _ampEnvelope.SetAttackTime(p.ampAttack);
         _ampEnvelope.SetDecayTime(p.ampDecay);
         _ampEnvelope.sustainLevel = p.ampSustain;
@@ -182,13 +205,19 @@ public class SynthVoice
     }
     
     // ============================================================
-    // NOTE CONTROL
+    // NOTE CONTROL (Updated signature with spatial parameters)
     // ============================================================
     
-    public void NoteOn(int midiNote, float velocity, uint timestamp)
+    /// <summary>
+    /// Trigger note with spatial parameters (gain, pan).
+    /// Called by MasterSynth after calculating spatialization.
+    /// </summary>
+    public void NoteOn(int midiNote, float velocity, float gain, float pan, uint timestamp)
     {
         _noteNumber = midiNote;
         _velocity = Mathf.Clamp01(velocity);
+        _gain = Mathf.Clamp01(gain);
+        _pan = Mathf.Clamp01(pan);
         _noteOnTime = timestamp;
         
         // Calculate base frequency
@@ -213,6 +242,15 @@ public class SynthVoice
         // _lfo2.Reset();
         
         _isActive = true;
+    }
+    
+    /// <summary>
+    /// Legacy NoteOn signature (for backward compatibility or direct triggering)
+    /// Uses default gain and center pan
+    /// </summary>
+    public void NoteOn(int midiNote, float velocity, uint timestamp)
+    {
+        NoteOn(midiNote, velocity, 1.0f, 0.5f, timestamp);
     }
     
     public void NoteOff()
@@ -244,6 +282,7 @@ public class SynthVoice
     // ============================================================
     // AUDIO PROCESSING
     // ============================================================
+    
     public float Process()
     {
         if (!_isActive)
@@ -251,7 +290,6 @@ public class SynthVoice
 
         // =========================================================
         // 1. AUDIO RATE MODULATION GENERATION
-        // (We run these every sample to keep phase/timing accurate)
         // =========================================================
         
         float lfo1Value = _lfo1.Process();
@@ -259,7 +297,7 @@ public class SynthVoice
         float filterEnvValue = _filterEnvelope.Process();
         float ampEnvValue = _ampEnvelope.Process();
 
-        // Update Matrix Sources (Lightweight array assignments)
+        // Update Matrix Sources
         _modMatrix.SetSource(ModulationMatrix.Source.LFO1, lfo1Value);
         _modMatrix.SetSource(ModulationMatrix.Source.LFO2, lfo2Value);
         _modMatrix.SetSource(ModulationMatrix.Source.FilterEnv, filterEnvValue);
@@ -269,14 +307,12 @@ public class SynthVoice
         // 2. CONTROL RATE LOGIC (Expensive Math)
         // =========================================================
         
-        // Only run the heavy routing and frequency math every CONTROL_RATE_INTERVAL samples
         if (_controlCounter <= 0)
         {
             // A. Process Routing Logic
             _modMatrix.Process();
 
-            // B. Calculate Target Pitch (Heavy Math.Pow inside here)
-            // This updates the target frequency for the oscillators
+            // B. Calculate Target Pitch
             UpdateOscillatorFrequencies(); 
 
             // C. Calculate Target Cutoff
@@ -291,7 +327,6 @@ public class SynthVoice
             modulatedCutoff = Mathf.Clamp(modulatedCutoff, 20f, (float)_sampleRate * 0.45f);
 
             // D. Update Filter Smoother Targets
-            // The smoother will interpolate to this new value over the next 16 samples
             _filterCutoffParam.SetTarget(modulatedCutoff);
             _filterResonanceParam.SetTarget(filterResonance);
 
@@ -305,8 +340,7 @@ public class SynthVoice
         // 3. AUDIO RATE SIGNAL PROCESSING
         // =========================================================
 
-        // Generate samples using the updated frequencies
-        // Note: Osc frequencies were updated in step 2B
+        // Generate oscillator samples
         float osc1Sample = _osc1.Process() * osc1Level;
         float osc2Sample = _osc2.Process() * osc2Level;
         float noiseSample = _noise.Process() * noiseLevel;
@@ -314,7 +348,6 @@ public class SynthVoice
         float oscMix = osc1Sample + osc2Sample + noiseSample;
 
         // Process Filter
-        // GetNextValue() performs the linear interpolation from the control rate steps
         float filtered = _filter.Process(
             oscMix,
             _filterCutoffParam.GetNextValue(),
@@ -322,8 +355,8 @@ public class SynthVoice
             (float)_sampleRate
         );
 
-        // Apply Amp Envelope & Velocity
-        float output = filtered * ampEnvValue * _velocity;
+        // Apply Amp Envelope, Velocity, and Spatial Gain
+        float output = filtered * ampEnvValue * _velocity * _gain;
 
         // =========================================================
         // 4. HOUSEKEEPING
@@ -340,86 +373,14 @@ public class SynthVoice
 
         return output;
     }
-    /*
-    public float OLDSLOWProcess()
-    {
-        if (!_isActive)
-            return 0f;
-        
-        // Process LFOs
-        float lfo1Value = _lfo1.Process();
-        float lfo2Value = _lfo2.Process();
-        
-        // Update modulation matrix sources
-        _modMatrix.SetSource(ModulationMatrix.Source.LFO1, lfo1Value);
-        _modMatrix.SetSource(ModulationMatrix.Source.LFO2, lfo2Value);
-        
-        float filterEnvValue = _filterEnvelope.Process();
-        _modMatrix.SetSource(ModulationMatrix.Source.FilterEnv, filterEnvValue);
-        
-        float ampEnvValue = _ampEnvelope.Process();
-        _modMatrix.SetSource(ModulationMatrix.Source.AmpEnv, ampEnvValue);
-        
-        // Process modulation matrix
-        _modMatrix.Process();
-        
-        // Update oscillator frequencies (for pitch modulation)
-        UpdateOscillatorFrequencies();
-        
-        // Generate oscillator samples
-        float osc1Sample = _osc1.Process() * osc1Level;
-        float osc2Sample = _osc2.Process() * osc2Level;
-        float noiseSample = _noise.Process() * noiseLevel;
-        
-        // Mix oscillators
-        float oscMix = osc1Sample + osc2Sample + noiseSample;
-        
-        // Calculate modulated filter parameters
-        float filterCutoffMod = _modMatrix.GetDestination(ModulationMatrix.Destination.FilterCutoff);
-        float modulatedCutoff = filterCutoff + 
-                                (filterEnvValue * filterEnvAmount) +
-                                (filterCutoffMod * lfo1ToFilter) +
-                                (_velocity * velocityToFilter);
-        
-        // Clamp cutoff to valid range
-        modulatedCutoff = Mathf.Clamp(modulatedCutoff, 20f, (float)_sampleRate * 0.45f);
-        
-        // Smooth filter parameters
-        _filterCutoffParam.SetTarget(modulatedCutoff);
-        _filterResonanceParam.SetTarget(filterResonance);
-        
-        // Process through filter
-        float filtered = _filter.Process(
-            oscMix,
-            _filterCutoffParam.GetNextValue(),
-            _filterResonanceParam.GetNextValue(),
-            (float)_sampleRate
-        );
-        
-        // Apply amplitude envelope
-        float output = filtered * ampEnvValue * _velocity;
-        
-        // Store current level for voice stealing
-        _currentLevel = Mathf.Abs(output);
-        
-        // Check if voice is finished
-        if (!_ampEnvelope.IsActive)
-        {
-            _isActive = false;
-            _noteNumber = -1;
-            _currentLevel = 0f;
-        }
-        
-        return output;
-    }
-    */
-    // Process with stereo output
+    
+    // Process with stereo output (applies panning)
     public void ProcessStereo(out float left, out float right)
     {
         float mono = Process();
         
         // Constant power panning
-        float panAngle = pan * Mathf.PI * 0.5f;
+        float panAngle = _pan * Mathf.PI * 0.5f;
         left = mono * Mathf.Cos(panAngle);
         right = mono * Mathf.Sin(panAngle);
     }
@@ -433,10 +394,16 @@ public class SynthVoice
     public bool IsInRelease => _ampEnvelope.IsInRelease;
     public float GetCurrentLevel() => _currentLevel;
     public uint GetNoteOnTime() => _noteOnTime;
+    public int CurrentPriority => _currentPriority;
     
     // ============================================================
     // PARAMETER SETTERS
     // ============================================================
+    
+    public void SetPriority(int priority)
+    {
+        _currentPriority = priority;
+    }
     
     public void SetPitchBend(float semitones)
     {

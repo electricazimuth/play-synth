@@ -1,0 +1,36 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 654d86ff3e10445f8aba5e305a0f8782, type: 3}
+  m_Name: Bass_Pluck
+  m_EditorClassIdentifier: 
+  patchName: Bass_Pluck
+  priority: 5
+  parameters:
+    osc1Level: 1
+    osc2Level: 0.6
+    noiseLevel: 0
+    osc2Semitones: 12
+    osc2Detune: 0.02
+    osc1Waveform: 3
+    osc2Waveform: 1
+    filterCutoff: 1200
+    filterResonance: 0.4
+    filterEnvAmount: 2500
+    ampAttack: 0.001
+    ampDecay: 0.15
+    ampSustain: 0.2
+    ampRelease: 0.15
+    filterAttack: 0.001
+    filterDecay: 0.12
+    filterSustain: 0.1
+    filterRelease: 0.1
+  defaultMidiNote: 48

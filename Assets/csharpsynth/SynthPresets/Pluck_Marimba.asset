@@ -1,0 +1,36 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 654d86ff3e10445f8aba5e305a0f8782, type: 3}
+  m_Name: Pluck_Marimba
+  m_EditorClassIdentifier: 
+  patchName: Pluck_Marimba
+  priority: 5
+  parameters:
+    osc1Level: 1
+    osc2Level: 0.5
+    noiseLevel: 0.05
+    osc2Semitones: 12
+    osc2Detune: 0
+    osc1Waveform: 0
+    osc2Waveform: 3
+    filterCutoff: 2500
+    filterResonance: 0.2
+    filterEnvAmount: 1500
+    ampAttack: 0.001
+    ampDecay: 0.4
+    ampSustain: 0
+    ampRelease: 0.3
+    filterAttack: 0.001
+    filterDecay: 0.3
+    filterSustain: 0
+    filterRelease: 0.2
+  defaultMidiNote: 60

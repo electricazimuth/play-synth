@@ -8,6 +8,10 @@ public struct SynthParameters
     public int osc2Semitones;
     public float osc2Detune;
 
+    // Waveform Selection
+    public WaveformType osc1Waveform;
+    public WaveformType osc2Waveform;
+
     // Filter
     public float filterCutoff;
     public float filterResonance;
@@ -25,6 +29,15 @@ public struct SynthParameters
     public float filterSustain;
     public float filterRelease;
     
+    // Waveform enum (matches AnalogOscillator.Waveform)
+    public enum WaveformType
+    {
+        Sine = 0,
+        Saw = 1,
+        Square = 2,
+        Triangle = 3
+    }
+    
     // Check if values have changed compared to another struct
     public bool HasChanged(ref SynthParameters other)
     {
@@ -35,6 +48,8 @@ public struct SynthParameters
                noiseLevel != other.noiseLevel ||
                osc2Semitones != other.osc2Semitones ||
                osc2Detune != other.osc2Detune ||
+               osc1Waveform != other.osc1Waveform ||
+               osc2Waveform != other.osc2Waveform ||
                filterCutoff != other.filterCutoff ||
                filterResonance != other.filterResonance ||
                filterEnvAmount != other.filterEnvAmount ||
