@@ -1,0 +1,11 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" xsi="http://www.w3.org/2001/XMLSchema-instance" engine="UnityEngine.UIElements" editor="UnityEditor.UIElements" noNamespaceSchemaLocation="../../../../UIElementsSchema/UIElements.xsd" editor-extension-mode="False">
+    <Style src="project://database/Assets/Azimuth/UITK/WorkingStyles.uss?fileID=7433441132597879392&amp;guid=aabc536a8b6da4bf8a064133dfa2d1b2&amp;type=3#WorkingStyles" />
+    <ui:VisualElement name="TopBar" picking-mode="Ignore" class="light" style="flex-grow: 0; flex-direction: row; background-color: rgba(0, 0, 0, 0.16); max-height: 80px;">
+        <ui:VisualElement name="LeftCol" picking-mode="Ignore" style="flex-grow: 1;">
+            <ui:VisualElement name="icon" style="flex-grow: 0; background-image: url(&quot;project://database/Assets/Azimuth/Icons/hexagon.png?fileID=21300000&amp;guid=77f37f5fa49864c38ae1c915b7f15165&amp;type=3#hexagon&quot;); width: 50px; height: 50px; margin-top: 10px; margin-right: 10px; margin-bottom: 10px; margin-left: 10px;" />
+        </ui:VisualElement>
+        <ui:VisualElement name="RightCol" picking-mode="Ignore" style="flex-grow: 1; flex-direction: row-reverse;">
+            <ui:RadioButtonGroup label="Edit Mode" value="0" name="editmode" choices="AddFace,RemoveFace,PlaceEmitter,PlaceReflector" class="editmode" style="flex-wrap: wrap; flex-direction: row; margin-top: 10px; margin-right: 10px; margin-bottom: 10px; margin-left: 10px;" />
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

@@ -1,0 +1,14 @@
+.col {
+    width: 50%;
+}
+
+#editmode .unity-radio-button-group__container {
+    flex-direction: row;
+    flex-wrap: wrap;
+}
+#editmode .unity-label{
+    min-width: 50px;
+}
+.light {
+    color: white;
+}
