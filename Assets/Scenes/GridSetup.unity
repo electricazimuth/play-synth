@@ -178,7 +178,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c3054e0c9989a46138cd75ff01ffa32c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _bpm: 120
+  _bpm: 30
   _beatsPerBar: 4
   _subdivisionsPerBeat: 4
 --- !u!114 &566538811
@@ -194,8 +194,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _pulseMaterial: {fileID: 2100000, guid: 629807a2ae9f5433fa0b25873dbff4b0, type: 2}
-  _pulseScale: 0.25
-  _pulseYOffset: 0.01
+  _pulseScale: 0.4
+  _pulseYOffset: 0.05
   _initialPoolSize: 64
 --- !u!114 &566538812
 MonoBehaviour:

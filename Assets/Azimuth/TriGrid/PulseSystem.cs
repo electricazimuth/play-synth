@@ -191,19 +191,25 @@ namespace TriGrid.Pulse
             pulse.ProgressAlongEdge = 1f;
 
             // Decay energy
-            pulse.Energy *= 0.95f; // Configurable decay factor
+            pulse.Energy *= 0.75f; // Configurable decay factor
 
             OnPulseArrivedAtVertex?.Invoke(pulse);
 
-            // Check if this is a boundary vertex → trigger sound
+            // Check if this is a boundary vertex → trigger sound 
+            // targets are the next vertex aimed at
             if (_gridData.IsBoundaryVertex(pulse.CurrentVertex))
             {
                 OnPulseBoundaryHit?.Invoke(pulse.CurrentVertex, pulse);
-                pulse.Energy *= 0.85f; // Additional decay on boundary hit
+                pulse.Energy *= 0.55f; // Additional decay on boundary hit
+            }
+            else
+            {
+                //does this get called?
+                //Debug.Log("CompletePulseMovement: Target NOT a IsBoundaryVertex " +  pulse.Id);
             }
 
             // Kill pulse if energy too low
-            if (pulse.Energy < 0.01f)
+            if (pulse.Energy < 0.05f)
             {
                 DestroyPulse(pulse);
             }

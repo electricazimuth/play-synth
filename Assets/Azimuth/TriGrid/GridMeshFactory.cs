@@ -131,6 +131,7 @@ namespace TriGrid.Unity
             uvs[0] = new Vector2(0.5f, 0.5f);
             normals[0] = Vector3.up;
 
+            /* -- downwards winding
             for (int i = 0; i < segments; i++)
             {
                 float angle = i * Mathf.PI * 2f / segments;
@@ -141,6 +142,23 @@ namespace TriGrid.Unity
                 triangles[i * 3] = 0;
                 triangles[i * 3 + 1] = i + 1;
                 triangles[i * 3 + 2] = (i + 1) % segments + 1;
+            }*/
+            for (int i = 0; i < segments; i++)
+            {
+                float angle = i * Mathf.PI * 2f / segments;
+                vertices[i + 1] = new Vector3(Mathf.Cos(angle) * radius, 0, Mathf.Sin(angle) * radius);
+                
+                // UVs look correct, mapping circle to 0-1 square
+                uvs[i + 1] = new Vector2(Mathf.Cos(angle) * 0.5f + 0.5f, Mathf.Sin(angle) * 0.5f + 0.5f);
+                
+                // Normals are manually set to UP, which is good for lighting, 
+                // but doesn't stop the rasterizer from culling the face if winding is wrong.
+                normals[i + 1] = Vector3.up;
+
+                // FIX: Swap the order of vertices to make the triangle winding Clockwise
+                triangles[i * 3] = 0;                        // Center
+                triangles[i * 3 + 1] = (i + 1) % segments + 1; // Next Vertex
+                triangles[i * 3 + 2] = i + 1;                // Current Vertex
             }
 
             _vertexMesh = new Mesh { name = "VertexHex" };
