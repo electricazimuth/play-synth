@@ -1,9 +1,11 @@
+// WorldObjectAudio.cs - Refactored to use event system instead of singleton
 using UnityEngine;
+using Azimuth.DES;
+using Azimuth.Audio;
 
 /// <summary>
 /// Lightweight audio trigger for game objects.
-/// Replaces per-object AudioSource/SynthPlayer approach.
-/// Fire-and-forget sound triggering via centralized MasterSynth.
+/// Event-driven architecture for decoupled audio triggering.
 /// </summary>
 public class WorldObjectAudio : MonoBehaviour
 {
@@ -13,6 +15,10 @@ public class WorldObjectAudio : MonoBehaviour
     
     [Tooltip("Base MIDI note to play (can be overridden by pitch mapping)")]
     public int baseMidiNote = 60;
+    
+    [Header("Duration Settings")]
+    [Tooltip("Auto note-off duration (0 = use envelope, >0 = auto release after seconds)")]
+    public float noteDuration = 0f;
     
     [Header("Collision Response")]
     [Tooltip("Minimum impact velocity to trigger sound")]
@@ -39,9 +45,22 @@ public class WorldObjectAudio : MonoBehaviour
     // INTERNAL STATE
     // ============================================================
     
+    // Unique ID for this instance's sustained notes
+    private string _sustainId;
+    
     // Track the currently playing note for mouse sustain
     private int _currentlyPlayingNote = -1;
     private bool _isNoteHeld = false;
+    
+    // ============================================================
+    // INITIALIZATION
+    // ============================================================
+    
+    void Awake()
+    {
+        // Generate unique sustain ID for this instance
+        _sustainId = $"{gameObject.GetInstanceID()}_{System.Guid.NewGuid().ToString().Substring(0, 8)}";
+    }
     
     // ============================================================
     // COLLISION HANDLING
@@ -49,12 +68,6 @@ public class WorldObjectAudio : MonoBehaviour
     
     void OnCollisionEnter(Collision collision)
     {
-        if (MasterSynth.Instance == null)
-        {
-            Debug.LogWarning("[WorldObjectAudio] MasterSynth not found in scene!");
-            return;
-        }
-        
         // Calculate impact velocity magnitude
         float impactVelocity = collision.relativeVelocity.magnitude;
         
@@ -78,7 +91,14 @@ public class WorldObjectAudio : MonoBehaviour
             ? collision.contacts[0].point 
             : transform.position;
         
-        MasterSynth.Instance.TriggerSound(patchName, contactPoint, midiNote, normalizedVelocity);
+        // CREATE AND DISPATCH EVENT
+        var triggerEvent = EventScheduler.New<SynthTriggerEvent>();
+        triggerEvent.PatchName = patchName;
+        triggerEvent.WorldPosition = contactPoint;
+        triggerEvent.MidiNote = midiNote;
+        triggerEvent.Velocity = normalizedVelocity;
+        triggerEvent.Duration = noteDuration;
+        EventScheduler.Dispatch(triggerEvent);
     }
     
     // ============================================================
@@ -87,31 +107,50 @@ public class WorldObjectAudio : MonoBehaviour
     
     void OnMouseDown()
     {
-        Debug.Log($"<color=green>MouseDown</color> on {name} Synth Preset {patchName}");
-        if (!triggerOnClick || MasterSynth.Instance == null)
+        if (!triggerOnClick)
             return;
+        
+        Debug.Log($"<color=green>MouseDown</color> on {name} Synth Preset {patchName}");
         
         if (sustainOnClick)
         {
             // Sustained mode - hold note until mouse release
             _currentlyPlayingNote = baseMidiNote;
             _isNoteHeld = true;
-            MasterSynth.Instance.TriggerSustainedSound(patchName, transform.position, baseMidiNote, clickVelocity, this);
-        }else{
+            
+            var sustainEvent = EventScheduler.New<SynthSustainStartEvent>();
+            sustainEvent.PatchName = patchName;
+            sustainEvent.WorldPosition = transform.position;
+            sustainEvent.MidiNote = baseMidiNote;
+            sustainEvent.Velocity = clickVelocity;
+            sustainEvent.SustainId = _sustainId;
+            EventScheduler.Dispatch(sustainEvent);
+        }
+        else
+        {
             // One-shot mode - fire and forget
-            MasterSynth.Instance.TriggerSound(patchName, transform.position, baseMidiNote, clickVelocity);
+            var triggerEvent = EventScheduler.New<SynthTriggerEvent>();
+            triggerEvent.PatchName = patchName;
+            triggerEvent.WorldPosition = transform.position;
+            triggerEvent.MidiNote = baseMidiNote;
+            triggerEvent.Velocity = clickVelocity;
+            triggerEvent.Duration = noteDuration;
+            EventScheduler.Dispatch(triggerEvent);
         }
     }
     
     void OnMouseUp()
     {
-        if (!triggerOnClick || MasterSynth.Instance == null)
+        if (!triggerOnClick)
             return;
         
         if (sustainOnClick && _isNoteHeld)
         {
             // Release the sustained note
-            MasterSynth.Instance.ReleaseSustainedSound(this);
+            var releaseEvent = EventScheduler.New<SynthSustainReleaseEvent>();
+            releaseEvent.SustainId = _sustainId;
+            EventScheduler.Dispatch(releaseEvent);
+            
             _isNoteHeld = false;
             _currentlyPlayingNote = -1;
         }
@@ -120,9 +159,11 @@ public class WorldObjectAudio : MonoBehaviour
     // Called when this object is destroyed while note is held
     void OnDestroy()
     {
-        if (_isNoteHeld && MasterSynth.Instance != null)
+        if (_isNoteHeld)
         {
-            MasterSynth.Instance.ReleaseSustainedSound(this);
+            var releaseEvent = EventScheduler.New<SynthSustainReleaseEvent>();
+            releaseEvent.SustainId = _sustainId;
+            EventScheduler.Dispatch(releaseEvent);
         }
     }
     
@@ -135,10 +176,13 @@ public class WorldObjectAudio : MonoBehaviour
     /// </summary>
     public void TriggerSound(float velocity = 0.8f)
     {
-        if (MasterSynth.Instance != null)
-        {
-            MasterSynth.Instance.TriggerSound(patchName, transform.position, baseMidiNote, velocity);
-        }
+        var triggerEvent = EventScheduler.New<SynthTriggerEvent>();
+        triggerEvent.PatchName = patchName;
+        triggerEvent.WorldPosition = transform.position;
+        triggerEvent.MidiNote = baseMidiNote;
+        triggerEvent.Velocity = velocity;
+        triggerEvent.Duration = noteDuration;
+        EventScheduler.Dispatch(triggerEvent);
     }
     
     /// <summary>
@@ -146,9 +190,40 @@ public class WorldObjectAudio : MonoBehaviour
     /// </summary>
     public void TriggerSound(int midiNote, float velocity = 0.8f)
     {
-        if (MasterSynth.Instance != null)
-        {
-            MasterSynth.Instance.TriggerSound(patchName, transform.position, midiNote, velocity);
-        }
+        var triggerEvent = EventScheduler.New<SynthTriggerEvent>();
+        triggerEvent.PatchName = patchName;
+        triggerEvent.WorldPosition = transform.position;
+        triggerEvent.MidiNote = midiNote;
+        triggerEvent.Velocity = velocity;
+        triggerEvent.Duration = noteDuration;
+        EventScheduler.Dispatch(triggerEvent);
+    }
+    
+    /// <summary>
+    /// Trigger with full control over all parameters
+    /// </summary>
+    public void TriggerSound(int midiNote, float velocity, float duration)
+    {
+        var triggerEvent = EventScheduler.New<SynthTriggerEvent>();
+        triggerEvent.PatchName = patchName;
+        triggerEvent.WorldPosition = transform.position;
+        triggerEvent.MidiNote = midiNote;
+        triggerEvent.Velocity = velocity;
+        triggerEvent.Duration = duration;
+        EventScheduler.Dispatch(triggerEvent);
+    }
+    
+    /// <summary>
+    /// Trigger at a specific world position (useful for spawned objects)
+    /// </summary>
+    public void TriggerSoundAtPosition(Vector3 worldPosition, float velocity = 0.8f)
+    {
+        var triggerEvent = EventScheduler.New<SynthTriggerEvent>();
+        triggerEvent.PatchName = patchName;
+        triggerEvent.WorldPosition = worldPosition;
+        triggerEvent.MidiNote = baseMidiNote;
+        triggerEvent.Velocity = velocity;
+        triggerEvent.Duration = noteDuration;
+        EventScheduler.Dispatch(triggerEvent);
     }
 }

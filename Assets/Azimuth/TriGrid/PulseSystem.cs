@@ -3,6 +3,8 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using TriGrid.Core;
+using Azimuth.DES;
+using Azimuth.Audio;
 
 namespace TriGrid.Pulse
 {
@@ -13,6 +15,8 @@ namespace TriGrid.Pulse
     public class PulseSystem
     {
         private readonly TriGridData _gridData;
+
+        private readonly Vector3 _gridOrigin;
         private readonly List<PulseData> _activePulses = new List<PulseData>();
         private readonly List<PulseData> _pulsesToRemove = new List<PulseData>();
         private readonly int _maxPulses;
@@ -30,10 +34,11 @@ namespace TriGrid.Pulse
 
         public IReadOnlyList<PulseData> ActivePulses => _activePulses;
 
-        public PulseSystem(TriGridData gridData, int maxPulses = 64)
+        public PulseSystem(TriGridData gridData, int maxPulses = 64, Vector3 gridOrigin = default(Vector3))
         {
             _gridData = gridData;
             _maxPulses = maxPulses;
+            _gridOrigin = gridOrigin;
         }
 
         /// <summary>
@@ -199,7 +204,19 @@ namespace TriGrid.Pulse
             // targets are the next vertex aimed at
             if (_gridData.IsBoundaryVertex(pulse.CurrentVertex))
             {
-                OnPulseBoundaryHit?.Invoke(pulse.CurrentVertex, pulse);
+                //OnPulseBoundaryHit?.Invoke(pulse.CurrentVertex, pulse);
+                // position is pulse.CurrentVertex
+                Vector3 pos = GridMath.VertexToWorld(pulse.CurrentVertex, _gridOrigin);
+                // CREATE AND DISPATCH EVENT
+                var triggerEvent = EventScheduler.New<SynthTriggerEvent>();
+                
+                triggerEvent.PatchName = "Pluck_Bell";
+                triggerEvent.WorldPosition = pos;
+                triggerEvent.MidiNote = 60;
+                triggerEvent.Velocity = pulse.Energy;
+                triggerEvent.Duration = 0.31f;
+                
+                EventScheduler.Dispatch(triggerEvent);
                 pulse.Energy *= 0.55f; // Additional decay on boundary hit
             }
             else

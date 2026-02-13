@@ -177,6 +177,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   patchName: Pluck_Bell
   baseMidiNote: 60
+  noteDuration: 0
   velocityThreshold: 0.5
   maxVelocity: 10
   velocityToPitch: 0
@@ -371,6 +372,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   patchName: Kick_808
   baseMidiNote: 45
+  noteDuration: 0
   velocityThreshold: 0.8
   maxVelocity: 10
   velocityToPitch: 0
@@ -729,6 +731,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: bd32159cb843e4bd1a2f2a84918e7d37, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  autoSubscribe: 1
+  autoUnsubscribe: 1
   totalVoices: 64
   presetLibrary:
   - {fileID: 11400000, guid: 90d9b945c45be46db86e83eb973b8058, type: 2}
@@ -739,6 +743,7 @@ MonoBehaviour:
   panStrength: 0.5
   masterVolume: 0.7
   headroom: 0.7
+  reportVoiceStealing: 0
 --- !u!1 &863029630
 GameObject:
   m_ObjectHideFlags: 0
@@ -910,6 +915,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   patchName: Pad_Warm
   baseMidiNote: 60
+  noteDuration: 0
   velocityThreshold: 0.5
   maxVelocity: 10
   velocityToPitch: 0
@@ -1476,6 +1482,37 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1068797501}
   m_CullTransparentMesh: 1
+--- !u!1 &1287465739
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1287465740}
+  m_Layer: 0
+  m_Name: Management
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1287465740
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1287465739}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 21.567299, y: -4.5624776, z: 11.079978}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1594847820
 GameObject:
   m_ObjectHideFlags: 0
@@ -1531,6 +1568,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   patchName: Bass_Pluck
   baseMidiNote: 60
+  noteDuration: 0
   velocityThreshold: 0.5
   maxVelocity: 10
   velocityToPitch: 0
@@ -1615,3 +1653,4 @@ SceneRoots:
   - {fileID: 900075496}
   - {fileID: 165229068}
   - {fileID: 696320256}
+  - {fileID: 1287465740}

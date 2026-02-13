@@ -80,7 +80,7 @@ namespace TriGrid.Unity
         {
             // Create core data
             _gridData = new TriGridData(_gridMinQ, _gridMinR, _gridMaxQ, _gridMaxR);
-            _pulseSystem = new PulseSystem(_gridData, _maxPulses);
+            _pulseSystem = new PulseSystem(_gridData, _maxPulses, _gridOrigin);
             _commandHistory = new GridCommandHistory();
 
             // Initialize visual manager

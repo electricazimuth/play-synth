@@ -1,16 +1,32 @@
-// MasterSynth.cs
+// MasterSynth.cs - Refactored to use event system instead of singleton
 using UnityEngine;
 using System.Collections.Generic;
+using Azimuth.DES;
+using Azimuth.Audio;
 
 /// <summary>
 /// Centralized synthesizer engine with global voice pool.
-/// Replaces per-object SynthPlayer architecture.
+/// Event-driven architecture for decoupled audio triggering.
 /// Single OnAudioFilterRead for maximum performance.
 /// </summary>
 [RequireComponent(typeof(AudioSource))]
-public class MasterSynth : MonoBehaviour
+public class MasterSynth : EventHandlerBehaviour, 
+    IEventHandler<SynthTriggerEvent>,
+    IEventHandler<SynthSustainStartEvent>,
+    IEventHandler<SynthSustainReleaseEvent>,
+    IEventHandler<SynthAllNotesOffEvent>,
+    IEventHandler<SynthAutoNoteOffEvent>
 {
-    public static MasterSynth Instance { get; private set; }
+    // ============================================================
+    // EVENT HANDLER PRIORITIES
+    // ============================================================
+    
+    // Audio events should be processed immediately with highest priority
+    int IEventHandler<SynthTriggerEvent>.Priority => 0;
+    int IEventHandler<SynthSustainStartEvent>.Priority => 0;
+    int IEventHandler<SynthSustainReleaseEvent>.Priority => 0;
+    int IEventHandler<SynthAllNotesOffEvent>.Priority => 0;
+    int IEventHandler<SynthAutoNoteOffEvent>.Priority => 0;
     
     // ============================================================
     // INSPECTOR SETTINGS
@@ -42,6 +58,10 @@ public class MasterSynth : MonoBehaviour
     [Tooltip("Extra headroom before soft clipping (lower = safer)")]
     public float headroom = 0.7f;
     
+    [Header("Debug")]
+    [Tooltip("Dispatch diagnostic events when voice stealing occurs")]
+    public bool reportVoiceStealing = false;
+    
     // ============================================================
     // INTERNAL STATE
     // ============================================================
@@ -50,8 +70,12 @@ public class MasterSynth : MonoBehaviour
     private Dictionary<string, SynthPreset> _presetLookup;
     private uint _timestamp = 0;
     
-    // Sustained note tracking (for click-and-hold gameplay)
-    private Dictionary<WorldObjectAudio, SynthVoice> _sustainedNotes;
+    // Sustained note tracking (by sustain ID, not object reference)
+    private Dictionary<string, SynthVoice> _sustainedNotes;
+    
+    // Auto note-off tracking (for timed notes)
+    private Dictionary<string, SynthVoice> _timedNotes;
+    private uint _timedNoteCounter = 0;
     
     // Active voice caching for performance
     private SynthVoice[] _activeVoices;
@@ -72,14 +96,6 @@ public class MasterSynth : MonoBehaviour
     
     void Awake()
     {
-        // Singleton pattern
-        if (Instance != null && Instance != this)
-        {
-            Destroy(gameObject);
-            return;
-        }
-        Instance = this;
-        
         _sampleRate = AudioSettings.outputSampleRate;
         
         // Initialize voice pool
@@ -101,8 +117,9 @@ public class MasterSynth : MonoBehaviour
             }
         }
         
-        // Initialize sustained note tracking
-        _sustainedNotes = new Dictionary<WorldObjectAudio, SynthVoice>();
+        // Initialize note tracking
+        _sustainedNotes = new Dictionary<string, SynthVoice>();
+        _timedNotes = new Dictionary<string, SynthVoice>();
         
         Debug.Log($"MasterSynth initialized: {totalVoices} voices, {_presetLookup.Count} presets loaded");
     }
@@ -137,107 +154,124 @@ public class MasterSynth : MonoBehaviour
     }
     
     // ============================================================
-    // PUBLIC API - TRIGGER SOUNDS
+    // EVENT HANDLERS
     // ============================================================
     
     /// <summary>
-    /// Trigger a synth sound from a world position.
-    /// This is the main entry point called by WorldObjectAudio components.
+    /// Handle one-shot synth trigger with optional auto note-off.
     /// </summary>
-    public void TriggerSound(string patchName, Vector3 worldPosition, int midiNote, float velocity)
+    public void OnEvent(SynthTriggerEvent ev)
     {
-        if (!_presetLookup.TryGetValue(patchName, out SynthPreset preset))
+        if (!_presetLookup.TryGetValue(ev.PatchName, out SynthPreset preset))
         {
-            Debug.LogWarning($"[MasterSynth] Patch '{patchName}' not found in preset library");
+            Debug.LogWarning($"[MasterSynth] Patch '{ev.PatchName}' not found in preset library");
             return;
         }
         
         // Calculate spatialization
         float gain, pan;
-        CalculateSpatialization(worldPosition, out gain, out pan);
+        CalculateSpatialization(ev.WorldPosition, out gain, out pan);
         
         // Find/steal a voice
-        SynthVoice voice = StealVoice(preset.priority);
-        
-        if (voice != null)
-        {
-            // Configure voice with preset (only resets state if inactive)
-            voice.Configure(preset.parameters);
-            
-            // Trigger note with spatial parameters
-            voice.NoteOn(midiNote, velocity, gain, pan, _timestamp++);
-        }
-    }
-    
-    /// <summary>
-    /// Trigger using preset's default MIDI note
-    /// </summary>
-    public void TriggerSound(string patchName, Vector3 worldPosition, float velocity)
-    {
-        if (_presetLookup.TryGetValue(patchName, out SynthPreset preset))
-        {
-            TriggerSound(patchName, worldPosition, preset.defaultMidiNote, velocity);
-        }
-    }
-    
-    /// <summary>
-    /// Trigger a sustained sound that can be released later (for click-and-hold)
-    /// Returns the voice so the caller can release it
-    /// </summary>
-    public void TriggerSustainedSound(string patchName, Vector3 worldPosition, int midiNote, float velocity, WorldObjectAudio sourceObject)
-    {
-        if (!_presetLookup.TryGetValue(patchName, out SynthPreset preset))
-        {
-            Debug.LogWarning($"[MasterSynth] Patch '{patchName}' not found in preset library");
-            return;
-        }
-        
-        // If this object already has a sustained note, release it first
-        if (_sustainedNotes.ContainsKey(sourceObject))
-        {
-            ReleaseSustainedSound(sourceObject);
-        }
-        
-        // Calculate spatialization
-        float gain, pan;
-        CalculateSpatialization(worldPosition, out gain, out pan);
-        
-        // Find/steal a voice
-        SynthVoice voice = StealVoice(preset.priority);
+        SynthVoice voice = StealVoice(preset.priority, ev.PatchName);
         
         if (voice != null)
         {
             // Configure voice with preset
             voice.Configure(preset.parameters);
+            voice.SetPriority(preset.priority);
             
             // Trigger note with spatial parameters
-            voice.NoteOn(midiNote, velocity, gain, pan, _timestamp++);
+            voice.NoteOn(ev.MidiNote, ev.Velocity, gain, pan, _timestamp++);
+            
+            // Schedule auto note-off if duration is specified
+            if (ev.Duration > 0f)
+            {
+                string voiceId = $"timed_{_timedNoteCounter++}";
+                _timedNotes[voiceId] = voice;
+                
+                // Schedule note-off event
+                var noteOffEvent = EventScheduler.New<SynthAutoNoteOffEvent>();
+                noteOffEvent.VoiceId = voiceId;
+                EventScheduler.Schedule(noteOffEvent, ev.Duration);
+            }
+        }
+    }
+    
+    /// <summary>
+    /// Handle sustained note start (for click-and-hold scenarios).
+    /// </summary>
+    public void OnEvent(SynthSustainStartEvent ev)
+    {
+        if (!_presetLookup.TryGetValue(ev.PatchName, out SynthPreset preset))
+        {
+            Debug.LogWarning($"[MasterSynth] Patch '{ev.PatchName}' not found in preset library");
+            return;
+        }
+        
+        // If this sustain ID already has a note, release it first
+        if (_sustainedNotes.ContainsKey(ev.SustainId))
+        {
+            _sustainedNotes[ev.SustainId].NoteOff();
+            _sustainedNotes.Remove(ev.SustainId);
+        }
+        
+        // Calculate spatialization
+        float gain, pan;
+        CalculateSpatialization(ev.WorldPosition, out gain, out pan);
+        
+        // Find/steal a voice
+        SynthVoice voice = StealVoice(preset.priority, ev.PatchName);
+        
+        if (voice != null)
+        {
+            // Configure voice with preset
+            voice.Configure(preset.parameters);
+            voice.SetPriority(preset.priority);
+            
+            // Trigger note with spatial parameters
+            voice.NoteOn(ev.MidiNote, ev.Velocity, gain, pan, _timestamp++);
             
             // Track this sustained note
-            _sustainedNotes[sourceObject] = voice;
+            _sustainedNotes[ev.SustainId] = voice;
         }
     }
     
     /// <summary>
-    /// Release a sustained sound (send NoteOff to the voice)
+    /// Handle sustained note release.
     /// </summary>
-    public void ReleaseSustainedSound(WorldObjectAudio sourceObject)
+    public void OnEvent(SynthSustainReleaseEvent ev)
     {
-        if (_sustainedNotes.TryGetValue(sourceObject, out SynthVoice voice))
+        if (_sustainedNotes.TryGetValue(ev.SustainId, out SynthVoice voice))
         {
             voice.NoteOff();
-            _sustainedNotes.Remove(sourceObject);
+            _sustainedNotes.Remove(ev.SustainId);
         }
     }
     
     /// <summary>
-    /// Stop all active notes (panic button)
+    /// Handle all notes off (panic button).
     /// </summary>
-    public void AllNotesOff()
+    public void OnEvent(SynthAllNotesOffEvent ev)
     {
         foreach (var voice in _voices)
         {
             voice.NoteOff();
+        }
+        
+        _sustainedNotes.Clear();
+        _timedNotes.Clear();
+    }
+    
+    /// <summary>
+    /// Handle auto note-off for timed notes (internal event).
+    /// </summary>
+    public void OnEvent(SynthAutoNoteOffEvent ev)
+    {
+        if (_timedNotes.TryGetValue(ev.VoiceId, out SynthVoice voice))
+        {
+            voice.NoteOff();
+            _timedNotes.Remove(ev.VoiceId);
         }
     }
     
@@ -270,7 +304,7 @@ public class MasterSynth : MonoBehaviour
     // VOICE STEALING
     // ============================================================
     
-    private SynthVoice StealVoice(int requestingPriority)
+    private SynthVoice StealVoice(int requestingPriority, string requestingPatchName)
     {
         // Strategy 1: Find inactive voice
         foreach (var voice in _voices)
@@ -302,7 +336,10 @@ public class MasterSynth : MonoBehaviour
         }
         
         if (candidateRelease != null)
+        {
+            ReportVoiceSteal(candidateRelease, requestingPriority, requestingPatchName, true);
             return candidateRelease;
+        }
         
         // Strategy 3: Steal oldest voice from same or lower priority
         SynthVoice candidateOldest = null;
@@ -318,7 +355,10 @@ public class MasterSynth : MonoBehaviour
         }
         
         if (candidateOldest != null)
+        {
+            ReportVoiceSteal(candidateOldest, requestingPriority, requestingPatchName, false);
             return candidateOldest;
+        }
         
         // Strategy 4: Last resort - steal ANY oldest voice
         oldestTime = uint.MaxValue;
@@ -331,7 +371,26 @@ public class MasterSynth : MonoBehaviour
             }
         }
         
+        if (candidateOldest != null)
+        {
+            ReportVoiceSteal(candidateOldest, requestingPriority, requestingPatchName, false);
+        }
+        
         return candidateOldest;
+    }
+    
+    private void ReportVoiceSteal(SynthVoice stolenVoice, int requestingPriority, string requestingPatchName, bool wasInRelease)
+    {
+        if (!reportVoiceStealing)
+            return;
+        
+        var stealEvent = EventScheduler.New<SynthVoiceStealEvent>();
+        stealEvent.StolenVoicePriority = stolenVoice.CurrentPriority;
+        stealEvent.RequestingPriority = requestingPriority;
+        stealEvent.StolenPatchName = "Unknown"; // Could track this if needed
+        stealEvent.RequestingPatchName = requestingPatchName;
+        stealEvent.WasInRelease = wasInRelease;
+        EventScheduler.Dispatch(stealEvent);
     }
     
     // ============================================================
@@ -459,6 +518,6 @@ public class MasterSynth : MonoBehaviour
     
     public string GetDiagnostics()
     {
-        return $"Voices: {GetActiveVoiceCount()}/{totalVoices} | Presets: {_presetLookup.Count}";
+        return $"Voices: {GetActiveVoiceCount()}/{totalVoices} | Sustained: {_sustainedNotes.Count} | Timed: {_timedNotes.Count} | Presets: {_presetLookup.Count}";
     }
 }
